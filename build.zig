@@ -7,9 +7,10 @@ pub fn build(b: *std.Build) void {
 
     const mod = b.addModule("embik", .{
         .root_source_file = b.path("src/root.zig"),
-
         .target = target,
     });
+
+    linkDeps(mod);
 
     const exe = b.addExecutable(.{
         .name = "embik",
@@ -25,7 +26,8 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    linkDeps(exe);
+    exe.linkLibC();
+    exe.linkLibCpp();
 
     b.installArtifact(exe);
 
@@ -57,14 +59,12 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_exe_tests.step);
 }
 
-fn linkDeps(exe: *std.Build.Step.Compile) void {
+fn linkDeps(exe: *std.Build.Module) void {
     // Use Homebrew installation
     exe.addIncludePath(.{ .cwd_relative = "/opt/homebrew/include" });
     exe.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/lib" });
 
-    exe.linkSystemLibrary("faiss"); // brew install faiss
-    exe.linkSystemLibrary("llama"); // brew install llama.cpp
-    exe.linkSystemLibrary("rocksdb"); // brew install rocksdb
-    exe.linkLibC();
-    exe.linkLibCpp();
+    exe.linkSystemLibrary("faiss", .{ .needed = true }); // brew install faiss
+    exe.linkSystemLibrary("llama", .{ .needed = true }); // brew install llama.cpp
+    exe.linkSystemLibrary("rocksdb", .{ .needed = true }); // brew install rocksdb
 }
