@@ -15,12 +15,6 @@ jobs:
       with:
         submodules: recursive
         lfs: true
-
-    - name: Setup Zig
-      uses: goto-bus-stop/setup-zig@v2
-      with:
-        version: master
-
     - name: Install dependencies
       run: |
         brew install faiss llama.cpp rocksdb zig
