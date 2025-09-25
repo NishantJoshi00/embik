@@ -4,6 +4,9 @@ const llama = @cImport({
 
 const std = @import("std");
 
+// const fn (c_uint, [*c]const u8, ?*anyopaque) void
+fn empty(_: c_uint, _: [*c]const u8, _: ?*anyopaque) callconv(.c) void {} 
+
 pub const EmbeddingEngine = struct {
     model: ?*llama.llama_model,
     context: ?*llama.llama_context,
@@ -14,6 +17,8 @@ pub const EmbeddingEngine = struct {
 
     pub fn init(model_path: []const u8) !Self {
         // Load the model
+
+        llama.llama_log_set(empty, null);
         const model_params = llama.llama_model_default_params();
         const model = llama.llama_load_model_from_file(model_path.ptr, model_params);
 
