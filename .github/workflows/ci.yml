@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v4
@@ -23,16 +23,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libfaiss-dev librocksdb-dev
-
-        # Install llama.cpp
-        git clone https://github.com/ggerganov/llama.cpp.git /tmp/llama.cpp
-        cd /tmp/llama.cpp
-        make -j$(nproc)
-        sudo cp libllama.so /usr/local/lib/
-        sudo cp ggml.h llama.h /usr/local/include/
-        sudo ldconfig
+        brew install faiss llama.cpp rocksdb zig
 
 
     - name: Run tests
