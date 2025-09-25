@@ -16,40 +16,61 @@ embik enables developers to create searchable knowledge bases from their codebas
 
 ## Current Status
 
-**Basic embedding functionality is working** - the project can currently load the nomic embedding model and generate embeddings for text inputs.
+**Working embedding engine** - the project has a functional embedding system that can load the nomic-embed-text-v2 model and generate 768-dimensional embeddings for text inputs.
 
-### Implemented 
-- Embedding engine with nomic-embed-text-v2 model integration
-- llama.cpp bindings for text embedding
-- Basic tokenization and embedding generation
-- Build system with dependency management (faiss, llama.cpp, rocksdb)
+### Implemented ✓
+- **EmbeddingEngine** (`src/embed.zig`) - Complete llama.cpp integration for text embeddings
+  - Model loading and context management with error handling
+  - Text tokenization using llama.cpp vocabulary
+  - Batch processing for efficient embedding generation
+  - Mean pooling for sequence-level embeddings
+  - Memory-safe resource cleanup and management
+- **Demo application** (`src/main.zig`) - Working example that embeds sample texts and displays results
+- **Build system** (`build.zig`) - Proper dependency management linking faiss, llama.cpp, and rocksdb
+- **Module structure** (`src/root.zig`) - Clean library organization with public API exports
 
-### In Progress / Planned =�
+### Architecture Files
+- `src/embed.zig` - Core embedding functionality (101 lines, fully implemented)
+- `src/main.zig` - Demo application showing embedding workflow (51 lines, functional)
+- `src/root.zig` - Module exports and library interface (5 lines, complete)
+- `src/storage.zig` - Placeholder for future storage implementation (empty file)
+- `build.zig` - Build configuration with C library linking (71 lines, complete)
+
+### Current Demo Capabilities
+The current implementation can:
+- Load the nomic-embed-text-v2 model from the local `deps/` directory
+- Tokenize input text using the model's vocabulary
+- Generate 768-dimensional embeddings for any text input
+- Process multiple texts in sequence with proper memory management
+- Display embedding vectors and metadata for debugging
+
+### Next Development Phase
 
 #### Core CLI Interface
-- [ ] Command-line argument parsing
+- [ ] Command-line argument parsing with subcommands
 - [ ] File indexing commands (`embik index <path>`)
 - [ ] Search commands (`embik search <query>`)
-- [ ] Configuration management
+- [ ] Configuration management and user settings
 
 #### File Processing Pipeline
-- [ ] Tree-sitter integration for code parsing
-- [ ] Language-aware chunking strategies
+- [ ] Tree-sitter integration for language-aware code parsing
+- [ ] Intelligent chunking strategies per file type
 - [ ] File type detection and handling
-- [ ] Recursive directory traversal
+- [ ] Recursive directory traversal with filtering
 - [ ] File change detection and incremental indexing
 
 #### Vector Storage & Search
 - [ ] FAISS index creation and management
-- [ ] Efficient vector similarity search
-- [ ] Index persistence and loading
+- [ ] Efficient vector similarity search implementation
+- [ ] Index persistence and loading from disk
 - [ ] Search result ranking and filtering
+- [ ] Similarity threshold configuration
 
 #### Metadata Management
 - [ ] RocksDB integration for metadata storage
 - [ ] File metadata persistence (path, size, modified time, etc.)
-- [ ] Chunk-to-file mapping
-- [ ] Index statistics and management
+- [ ] Chunk-to-file mapping and reverse lookups
+- [ ] Index statistics and management commands
 
 #### Advanced Features
 - [ ] Multiple embedding models support
@@ -73,20 +94,34 @@ zig build
 
 ### Run
 ```bash
-# Current demo
+# Current demo - embeds sample texts and shows results
 zig build run
 
-# Future CLI usage
+# Future CLI usage (planned)
 ./zig-out/bin/embik index ~/code
 ./zig-out/bin/embik search "error handling patterns"
 ```
 
 ## Model Setup
 
-The project includes the nomic-embed-text-v2 model in `deps/nomic-embed-text-v2-gguf/`. This provides 768-dimensional embeddings optimized for semantic similarity.
+The project includes the nomic-embed-text-v2 model in `deps/nomic-embed-text-v2-gguf/`. This provides 768-dimensional embeddings optimized for semantic similarity tasks.
 
 ## Development
 
 Built with Zig 0.15.1+, leveraging system libraries for maximum performance while maintaining memory safety.
 
-Current development focus: Building out the CLI interface and file processing pipeline to move from proof-of-concept to functional tool.
+Current development focus: Transitioning from proof-of-concept embedding engine to building out the CLI interface and file processing pipeline for a complete semantic search tool.
+
+### Project Structure
+```
+embik/
+├── src/
+│   ├── embed.zig      # Core embedding functionality (complete)
+│   ├── main.zig       # Demo application (functional)
+│   ├── root.zig       # Module exports (complete)
+│   └── storage.zig    # Future storage layer (placeholder)
+├── deps/
+│   └── nomic-embed-text-v2-gguf/  # Pre-trained model
+├── build.zig          # Build configuration
+└── README.md          # This file
+```
