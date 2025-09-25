@@ -27,7 +27,6 @@ pub const EmbeddingEngine = struct {
         }
 
         const n_embd = llama.llama_n_embd(model);
-        std.debug.print("Model loaded with embedding dimension: {d}\n", .{n_embd});
 
         // Create context parameters
         var ctx_params = llama.llama_context_default_params();
