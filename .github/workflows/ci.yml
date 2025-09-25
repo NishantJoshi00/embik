@@ -12,6 +12,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        lfs: true
 
     - name: Setup Zig
       uses: goto-bus-stop/setup-zig@v2
@@ -31,8 +34,6 @@ jobs:
         sudo cp ggml.h llama.h /usr/local/include/
         sudo ldconfig
 
-    - name: Create embedding model directory
-      run: mkdir -p deps/nomic-embed-text-v2-gguf
 
     - name: Run tests
       run: zig build test
