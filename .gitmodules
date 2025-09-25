@@ -1,0 +1,3 @@
+[submodule "deps/nomic-embed-text-v2-gguf"]
+	path = deps/nomic-embed-text-v2-gguf
+	url = https://huggingface.co/ggml-org/Nomic-Embed-Text-V2-GGUF
