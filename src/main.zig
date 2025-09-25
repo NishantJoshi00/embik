@@ -2,6 +2,7 @@ const std = @import("std");
 const embik = @import("embik");
 
 const EmbeddingEngine = embik.embed.EmbeddingEngine;
+const MetadataStore = embik.storage.MetadataStore;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -47,4 +48,57 @@ pub fn main() !void {
     }
 
     std.debug.print("\nAll embeddings completed successfully!\n", .{});
+
+    // Test MetadataStore
+    std.debug.print("\n--- Testing MetadataStore ---\n", .{});
+
+    var store = MetadataStore.init(allocator, "/tmp/embik_test_db") catch |err| {
+        std.debug.print("Failed to initialize MetadataStore: {}\n", .{err});
+        return;
+    };
+    defer store.deinit();
+
+    // Test put
+    store.put("key1", "value1") catch |err| {
+        std.debug.print("Failed to put data: {}\n", .{err});
+        return;
+    };
+    std.debug.print("Successfully stored key1 -> value1\n", .{});
+
+    // Test get
+    if (store.get("key1") catch |err| {
+        std.debug.print("Failed to get data: {}\n", .{err});
+        return;
+    }) |value| {
+        defer allocator.free(value);
+        std.debug.print("Retrieved: key1 -> {s}\n", .{value});
+
+        if (std.mem.eql(u8, value, "value1")) {
+            std.debug.print("✓ Value matches expected\n", .{});
+        } else {
+            std.debug.print("✗ Value mismatch\n", .{});
+        }
+    } else {
+        std.debug.print("✗ Key not found\n", .{});
+    }
+
+    // Test delete
+    store.delete("key1") catch |err| {
+        std.debug.print("Failed to delete data: {}\n", .{err});
+        return;
+    };
+    std.debug.print("Successfully deleted key1\n", .{});
+
+    // Verify deletion
+    if (store.get("key1") catch |err| {
+        std.debug.print("Failed to get data after deletion: {}\n", .{err});
+        return;
+    }) |value| {
+        defer allocator.free(value);
+        std.debug.print("✗ Key still exists after deletion\n", .{});
+    } else {
+        std.debug.print("✓ Key successfully deleted\n", .{});
+    }
+
+    std.debug.print("MetadataStore test completed!\n", .{});
 }

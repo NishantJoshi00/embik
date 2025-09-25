@@ -2,3 +2,4 @@
 const std = @import("std");
 
 pub const embed = @import("embed.zig");
+pub const storage = @import("storage.zig");

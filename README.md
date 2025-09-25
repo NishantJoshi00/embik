@@ -16,7 +16,7 @@ embik enables developers to create searchable knowledge bases from their codebas
 
 ## Current Status
 
-**Working embedding engine** - the project has a functional embedding system that can load the nomic-embed-text-v2 model and generate 768-dimensional embeddings for text inputs.
+**Working embedding engine and metadata storage** - the project has functional embedding system that can load the nomic-embed-text-v2 model and generate 768-dimensional embeddings for text inputs, plus a complete RocksDB-based metadata storage layer.
 
 ### Implemented ✓
 - **EmbeddingEngine** (`src/embed.zig`) - Complete llama.cpp integration for text embeddings
@@ -25,15 +25,20 @@ embik enables developers to create searchable knowledge bases from their codebas
   - Batch processing for efficient embedding generation
   - Mean pooling for sequence-level embeddings
   - Memory-safe resource cleanup and management
-- **Demo application** (`src/main.zig`) - Working example that embeds sample texts and displays results
+- **MetadataStore** (`src/storage.zig`) - RocksDB integration for persistent metadata storage
+  - Database initialization with proper error handling
+  - Key-value operations: put, get, delete
+  - Memory management for retrieved values
+  - Thread-safe database operations
+- **Demo application** (`src/main.zig`) - Working example that embeds sample texts and tests storage
 - **Build system** (`build.zig`) - Proper dependency management linking faiss, llama.cpp, and rocksdb
 - **Module structure** (`src/root.zig`) - Clean library organization with public API exports
 
 ### Architecture Files
 - `src/embed.zig` - Core embedding functionality (101 lines, fully implemented)
-- `src/main.zig` - Demo application showing embedding workflow (51 lines, functional)
+- `src/main.zig` - Demo application showing embedding and storage workflow (104 lines, functional)
 - `src/root.zig` - Module exports and library interface (5 lines, complete)
-- `src/storage.zig` - Placeholder for future storage implementation (empty file)
+- `src/storage.zig` - RocksDB metadata storage implementation (121 lines, fully implemented)
 - `build.zig` - Build configuration with C library linking (71 lines, complete)
 
 ### Current Demo Capabilities
@@ -42,7 +47,8 @@ The current implementation can:
 - Tokenize input text using the model's vocabulary
 - Generate 768-dimensional embeddings for any text input
 - Process multiple texts in sequence with proper memory management
-- Display embedding vectors and metadata for debugging
+- Store and retrieve metadata using RocksDB with full CRUD operations
+- Display embedding vectors and storage test results for debugging
 
 ### Next Development Phase
 
@@ -67,7 +73,7 @@ The current implementation can:
 - [ ] Similarity threshold configuration
 
 #### Metadata Management
-- [ ] RocksDB integration for metadata storage
+- [x] RocksDB integration for metadata storage
 - [ ] File metadata persistence (path, size, modified time, etc.)
 - [ ] Chunk-to-file mapping and reverse lookups
 - [ ] Index statistics and management commands
@@ -94,7 +100,7 @@ zig build
 
 ### Run
 ```bash
-# Current demo - embeds sample texts and shows results
+# Current demo - embeds sample texts and tests metadata storage
 zig build run
 
 # Future CLI usage (planned)
