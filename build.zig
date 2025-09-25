@@ -64,7 +64,7 @@ fn linkDeps(exe: *std.Build.Module) void {
     exe.addIncludePath(.{ .cwd_relative = "/opt/homebrew/include" });
     exe.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/lib" });
 
-    exe.linkSystemLibrary("faiss", .{ .needed = true }); // brew install faiss
+    exe.linkSystemLibrary("faiss_c", .{ .needed = true }); // brew install faiss
     exe.linkSystemLibrary("llama", .{ .needed = true }); // brew install llama.cpp
     exe.linkSystemLibrary("rocksdb", .{ .needed = true }); // brew install rocksdb
 }
