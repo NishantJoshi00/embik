@@ -250,3 +250,202 @@ pub const SearchResult = struct {
         self.allocator.free(self.labels);
     }
 };
+
+/// Combined document store with text, metadata, and vector search
+pub const DocumentStore = struct {
+    const Self = @This();
+
+    vector_store: VectorStore,
+    metadata_store: MetadataStore,
+    allocator: std.mem.Allocator,
+    base_path: []u8,
+    rng: std.Random.DefaultPrng,
+    last_timestamp_ms: u64,
+    counter: u32,
+
+    pub fn init(allocator: std.mem.Allocator, base_path: []const u8, dimension: faiss.idx_t) !Self {
+        // Create base directory
+        std.fs.cwd().makeDir(base_path) catch |err| switch (err) {
+            error.PathAlreadyExists => {},
+            else => return err,
+        };
+
+        const base_path_owned = try allocator.dupe(u8, base_path);
+
+        // Create subdirectories
+        const vec_path = try std.fmt.allocPrint(allocator, "{s}/vec", .{base_path});
+        defer allocator.free(vec_path);
+        const data_path = try std.fmt.allocPrint(allocator, "{s}/data", .{base_path});
+        defer allocator.free(data_path);
+
+        std.fs.cwd().makeDir(vec_path) catch |err| switch (err) {
+            error.PathAlreadyExists => {},
+            else => return err,
+        };
+        std.fs.cwd().makeDir(data_path) catch |err| switch (err) {
+            error.PathAlreadyExists => {},
+            else => return err,
+        };
+
+        // Initialize stores
+        const vector_store = VectorStore.init(allocator, dimension, 2, vec_path) catch |err| {
+            allocator.free(base_path_owned);
+            return err;
+        };
+
+        const metadata_store = MetadataStore.init(allocator, data_path) catch |err| {
+            allocator.free(base_path_owned);
+            return err;
+        };
+
+        // Initialize RNG with high-entropy seed
+        var seed_bytes: [8]u8 = undefined;
+        std.crypto.random.bytes(seed_bytes[0..]);
+        const seed = std.mem.readInt(u64, &seed_bytes, .little);
+        const rng = std.Random.DefaultPrng.init(seed);
+
+        return Self{
+            .vector_store = vector_store,
+            .metadata_store = metadata_store,
+            .allocator = allocator,
+            .base_path = base_path_owned,
+            .rng = rng,
+            .last_timestamp_ms = 0,
+            .counter = 0,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.vector_store.deinit();
+        self.metadata_store.deinit();
+        self.allocator.free(self.base_path);
+    }
+
+    /// Generate a unique ID based on timestamp, process ID, and entropy
+    fn generateUID(self: *Self) u64 {
+        // Get current timestamp in milliseconds
+        const timestamp_ms = std.time.milliTimestamp();
+
+        // If same millisecond as last call, increment counter
+        if (timestamp_ms == self.last_timestamp_ms) {
+            self.counter += 1;
+        } else {
+            self.last_timestamp_ms = @intCast(timestamp_ms);
+            self.counter = 0;
+        }
+
+        // Get process ID for additional uniqueness across processes
+        const pid = switch (@import("builtin").os.tag) {
+            .linux => std.os.linux.getpid(),
+            .macos => std.c.getpid(),
+            else => @as(u32, 1), // fallback
+        };
+
+        // Generate random entropy
+        const random_part = self.rng.random().int(u16);
+
+        // Combine components into a 64-bit UID:
+        // - Top 42 bits: timestamp (milliseconds since epoch)
+        // - Next 12 bits: counter (up to 4095 IDs per millisecond)
+        // - Next 6 bits: process ID (masked to 6 bits)
+        // - Bottom 4 bits: random entropy
+        const uid = (@as(u64, @intCast(timestamp_ms)) << 22) |
+                   (@as(u64, self.counter & 0xFFF) << 10) |
+                   (@as(u64, @as(u64, @intCast(pid)) & 0x3F) << 4) |
+                   (@as(u64, random_part & 0xF));
+
+        return uid;
+    }
+
+    /// Store a document with text, embedding, and custom metadata
+    pub fn storeDocument(self: *Self, text: []const u8, embedding: []const f32, author: []const u8, category: []const u8) !u64 {
+        const uid = self.generateUID();
+
+        // Store the embedding in vector store
+        self.vector_store.add_vector(embedding, @intCast(uid)) catch |err| {
+            return err;
+        };
+
+        // Create metadata JSON with proper structure
+        const metadata_json = try std.fmt.allocPrint(self.allocator,
+            "{{\"text\":\"{s}\",\"author\":\"{s}\",\"category\":\"{s}\",\"uid\":{d},\"created_at\":{d}}}",
+            .{ text, author, category, uid, std.time.timestamp() }
+        );
+        defer self.allocator.free(metadata_json);
+
+        // Store metadata using UID as key
+        const uid_str = try std.fmt.allocPrint(self.allocator, "{d}", .{uid});
+        defer self.allocator.free(uid_str);
+
+        self.metadata_store.put(uid_str, metadata_json) catch |err| {
+            // If metadata storage fails, try to clean up the vector
+            self.vector_store.delete_vector(@intCast(uid)) catch {};
+            return err;
+        };
+
+        return uid;
+    }
+
+    /// Retrieve a document by UID (raw JSON)
+    pub fn getDocument(self: *Self, uid: u64) !?[]u8 {
+        const uid_str = try std.fmt.allocPrint(self.allocator, "{d}", .{uid});
+        defer self.allocator.free(uid_str);
+
+        return self.metadata_store.get(uid_str);
+    }
+
+
+    /// Delete a document by UID
+    pub fn deleteDocument(self: *Self, uid: u64) !void {
+        const uid_str = try std.fmt.allocPrint(self.allocator, "{d}", .{uid});
+        defer self.allocator.free(uid_str);
+
+        // Delete from both stores
+        try self.vector_store.delete_vector(@intCast(uid));
+        try self.metadata_store.delete(uid_str);
+    }
+
+    /// Search for similar documents and return with metadata
+    pub fn searchSimilar(self: *Self, query_embedding: []const f32, k: faiss.idx_t) !DocumentSearchResult {
+        // Search in vector store
+        const vector_results = try self.vector_store.search(self.allocator, query_embedding, k);
+
+        // Get metadata for each result
+        const documents = try self.allocator.alloc(?[]u8, vector_results.labels.len);
+
+        for (vector_results.labels, 0..) |label, i| {
+            if (label >= 0) {
+                documents[i] = self.getDocument(@intCast(label)) catch null;
+            } else {
+                documents[i] = null;
+            }
+        }
+
+        return DocumentSearchResult{
+            .vector_result = vector_results,
+            .documents = documents,
+            .allocator = self.allocator,
+        };
+    }
+
+    /// Get total number of documents
+    pub fn count(self: *Self) faiss.idx_t {
+        return self.vector_store.ntotal();
+    }
+};
+
+pub const DocumentSearchResult = struct {
+    vector_result: SearchResult,
+    documents: []?[]u8,
+    allocator: std.mem.Allocator,
+
+    pub fn deinit(self: *DocumentSearchResult) void {
+        for (self.documents) |doc_opt| {
+            if (doc_opt) |doc| {
+                self.allocator.free(doc);
+            }
+        }
+        self.allocator.free(self.documents);
+        self.vector_result.deinit();
+    }
+};

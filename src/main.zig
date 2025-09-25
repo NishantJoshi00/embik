@@ -4,6 +4,7 @@ const embik = @import("embik");
 const EmbeddingEngine = embik.embed.EmbeddingEngine;
 const MetadataStore = embik.storage.MetadataStore;
 const VectorStore = embik.storage.VectorStore;
+const DocumentStore = embik.storage.DocumentStore;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -266,4 +267,110 @@ pub fn main() !void {
     }
 
     std.debug.print("\nSemantic similarity testing completed!\n", .{});
+
+    // Test DocumentStore
+    std.debug.print("\n--- Testing DocumentStore ---\n", .{});
+
+    var document_store = DocumentStore.init(allocator, "/tmp/embik_docs", engine.n_embd) catch |err| {
+        std.debug.print("Failed to initialize DocumentStore: {}\n", .{err});
+        return;
+    };
+    defer document_store.deinit();
+
+    std.debug.print("✓ DocumentStore initialized with folder structure\n", .{});
+
+    // Test documents with metadata
+    const test_documents = [_]struct {
+        text: []const u8,
+        author: []const u8,
+        category: []const u8,
+    }{
+        .{ .text = "The quick brown fox jumps over the lazy dog", .author = "Test", .category = "Animals" },
+        .{ .text = "Machine learning is revolutionizing technology", .author = "AI Expert", .category = "Technology" },
+        .{ .text = "Dogs are loyal and friendly companions", .author = "Pet Lover", .category = "Animals" },
+        .{ .text = "Python programming language is versatile", .author = "Programmer", .category = "Technology" },
+    };
+
+    var document_uids: [test_documents.len]u64 = undefined;
+
+    // Store documents
+    std.debug.print("\nStoring documents:\n", .{});
+    for (test_documents, 0..) |doc, i| {
+        const embedding = engine.embed(allocator, doc.text) catch |err| {
+            std.debug.print("Failed to embed document {d}: {}\n", .{i, err});
+            continue;
+        };
+        defer allocator.free(embedding);
+
+        const uid = document_store.storeDocument(doc.text, embedding, doc.author, doc.category) catch |err| {
+            std.debug.print("Failed to store document {d}: {}\n", .{i, err});
+            continue;
+        };
+
+        document_uids[i] = uid;
+        std.debug.print("  ✓ Stored '{s}' with UID: {d}\n", .{doc.text, uid});
+    }
+
+    std.debug.print("\nTotal documents stored: {d}\n", .{document_store.count()});
+
+    // Test retrieval by UID
+    std.debug.print("\nRetrieving document by UID:\n", .{});
+    if (document_store.getDocument(document_uids[0])) |doc_data_opt| {
+        if (doc_data_opt) |doc_data| {
+            defer allocator.free(doc_data);
+            std.debug.print("  ✓ Retrieved UID {d}: {s}\n", .{document_uids[0], doc_data});
+        } else {
+            std.debug.print("  ✗ Retrieved UID {d}: [null]\n", .{document_uids[0]});
+        }
+    } else |err| {
+        std.debug.print("  ✗ Failed to retrieve document: {}\n", .{err});
+    }
+
+    // Test semantic search
+    std.debug.print("\nSemantic search test:\n", .{});
+    const search_query = "programming languages and coding";
+    const query_embedding = engine.embed(allocator, search_query) catch |err| {
+        std.debug.print("Failed to embed search query: {}\n", .{err});
+        return;
+    };
+    defer allocator.free(query_embedding);
+
+    var search_results = document_store.searchSimilar(query_embedding, 3) catch |err| {
+        std.debug.print("Search failed: {}\n", .{err});
+        return;
+    };
+    defer search_results.deinit();
+
+    std.debug.print("🔍 Query: '{s}'\n", .{search_query});
+    for (search_results.vector_result.labels, search_results.vector_result.distances, search_results.documents) |label, distance, doc_opt| {
+        std.debug.print("  📝 UID: {d}, Distance: {d:.4}\n", .{label, distance});
+        if (doc_opt) |doc_data| {
+            std.debug.print("     Data: {s}\n", .{doc_data});
+        } else {
+            std.debug.print("     Data: [null]\n", .{});
+        }
+    }
+
+    // Test deletion
+    std.debug.print("\nTesting document deletion:\n", .{});
+    document_store.deleteDocument(document_uids[1]) catch |err| {
+        std.debug.print("Failed to delete document: {}\n", .{err});
+        return;
+    };
+    std.debug.print("  ✓ Deleted document UID {d}\n", .{document_uids[1]});
+    std.debug.print("  Documents remaining: {d}\n", .{document_store.count()});
+
+    // Verify deletion
+    if (document_store.getDocument(document_uids[1])) |doc_data| {
+        if (doc_data) |data| {
+            defer allocator.free(data);
+            std.debug.print("  ✗ Document still exists after deletion!\n", .{});
+        } else {
+            std.debug.print("  ✓ Document successfully deleted (null returned)\n", .{});
+        }
+    } else |err| {
+        std.debug.print("  ✓ Document successfully deleted (error: {})\n", .{err});
+    }
+
+    std.debug.print("\nDocumentStore test completed!\n", .{});
 }
